@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+﻿const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const { User, Role, PasswordReset, RefreshToken, Lawyer } = require('../models');
@@ -6,20 +6,20 @@ const { sendPasswordResetEmail } = require('../utils/email');
 const { sendVerifyEmail } = require('../utils/email');
 
 /**
- * Đăng ký tài khoản mới
+ * ÄÄƒng kÃ½ tÃ i khoáº£n má»›i
  */
 const signup = async (req, res) => {
     console.log('--- Signup Attempt ---');
     console.log('Body:', req.body);
     console.log('File:', req.file);
     try {
-        // Kiểm tra validation errors
+        // Kiá»ƒm tra validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             console.log('Validation Errors:', errors.array());
             return res.status(400).json({
                 success: false,
-                message: `Dữ liệu không hợp lệ: ${errors.array().map(e => e.msg).join(', ')}`,
+                message: `Dá»¯ liá»‡u khÃ´ng há»£p lá»‡: ${errors.array().map(e => e.msg).join(', ')}`,
                 errors: errors.array()
             });
         }
@@ -28,34 +28,34 @@ const signup = async (req, res) => {
         const lawyerInfo = req.body.lawyerInfo
             ? JSON.parse(req.body.lawyerInfo)
             : null;
-        // Kiểm tra email đã tồn tại chưa
+        // Kiá»ƒm tra email Ä‘Ã£ tá»“n táº¡i chÆ°a
         const existingUser = await User.findOne({ where: { email } });
 
         if (existingUser) {
             return res.status(400).json({
                 success: false,
-                message: 'Email này đã được sử dụng.'
+                message: 'Email nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.'
             });
         }
 
-        // Mặc định role là client (role_id = 3) nếu không chỉ định
+        // Máº·c Ä‘á»‹nh role lÃ  client (role_id = 3) náº¿u khÃ´ng chá»‰ Ä‘á»‹nh
         const finalRoleId = roleId || 3;
         if (finalRoleId === 2 && !req.file) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng upload chứng chỉ hành nghề luật sư.'
+                message: 'Vui lÃ²ng upload chá»©ng chá»‰ hÃ nh nghá» luáº­t sÆ°.'
             });
         }
-        // Nếu đăng ký lawyer, kiểm tra thông tin bắt buộc
+        // Náº¿u Ä‘Äƒng kÃ½ lawyer, kiá»ƒm tra thÃ´ng tin báº¯t buá»™c
         if (finalRoleId === 2 && lawyerInfo) {
             if (!lawyerInfo.barNumber) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Số thẻ luật sư là bắt buộc.'
+                    message: 'Sá»‘ tháº» luáº­t sÆ° lÃ  báº¯t buá»™c.'
                 });
             }
 
-            // Kiểm tra số thẻ luật sư đã tồn tại chưa
+            // Kiá»ƒm tra sá»‘ tháº» luáº­t sÆ° Ä‘Ã£ tá»“n táº¡i chÆ°a
             const existingLawyer = await Lawyer.findOne({
                 where: { bar_number: lawyerInfo.barNumber }
             });
@@ -63,22 +63,22 @@ const signup = async (req, res) => {
             if (existingLawyer) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Số thẻ luật sư này đã được sử dụng.'
+                    message: 'Sá»‘ tháº» luáº­t sÆ° nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.'
                 });
             }
         }
 
-        // Tạo user mới (password sẽ tự động hash bởi hook)
+        // Táº¡o user má»›i (password sáº½ tá»± Ä‘á»™ng hash bá»Ÿi hook)
         const newUser = await User.create({
             email,
-            password, // Sẽ được hash tự động bởi beforeCreate hook
+            password, // Sáº½ Ä‘Æ°á»£c hash tá»± Ä‘á»™ng bá»Ÿi beforeCreate hook
             full_name: fullName,
             phone: phone || null,
             role_id: finalRoleId,
-            is_active: finalRoleId === 2 ? false : true, // Lawyer cần verify trước khi active
+            is_active: finalRoleId === 2 ? false : true, // Lawyer cáº§n verify trÆ°á»›c khi active
             email_verified: false
         });
-        // ===== TẠO TOKEN VERIFY EMAIL =====
+        // ===== Táº O TOKEN VERIFY EMAIL =====
         const verifyToken = crypto.randomBytes(32).toString('hex');
 
         const cleanFrontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').trim();
@@ -87,22 +87,18 @@ const signup = async (req, res) => {
 
         await newUser.update({
             email_verify_token: verifyToken,
-            email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 giờ
+            email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 giá»
         });
 
-        // ===== GỬI EMAIL VERIFY =====
+        // ===== Gá»¬I EMAIL VERIFY =====
         try {
-            (
-                newUser.email,
-                newUser.full_name,
-                verifyUrl
-            );
+            await sendVerifyEmail(newUser.email, newUser.full_name, verifyUrl);
         } catch (emailError) {
             console.error('Verify email sending error:', emailError);
         }
 
 
-        // Nếu đăng ký lawyer, tạo thông tin lawyer
+        // Náº¿u Ä‘Äƒng kÃ½ lawyer, táº¡o thÃ´ng tin lawyer
         if (finalRoleId === 2 && lawyerInfo) {
             await Lawyer.create({
                 user_id: newUser.id,
@@ -115,13 +111,13 @@ const signup = async (req, res) => {
                 years_of_experience: lawyerInfo.yearsOfExperience || null,
                 consultation_fee: lawyerInfo.consultationFee || null,
                 bio: lawyerInfo.bio || null,
-                license_file: req.file.path, // ✅ FILE
+                license_file: req.file.path, // âœ… FILE
 
                 verification_status: 'pending'
             });
         }
 
-        // Lấy thông tin user với role
+        // Láº¥y thÃ´ng tin user vá»›i role
         const userWithRole = await User.findByPk(newUser.id, {
             include: [{
                 model: Role,
@@ -132,8 +128,8 @@ const signup = async (req, res) => {
         });
 
         const message = finalRoleId === 2
-            ? 'Đăng ký thành công! Tài khoản của bạn đang chờ xác thực từ admin.'
-            : 'Đăng ký thành công!';
+            ? 'ÄÄƒng kÃ½ thÃ nh cÃ´ng! TÃ i khoáº£n cá»§a báº¡n Ä‘ang chá» xÃ¡c thá»±c tá»« admin.'
+            : 'ÄÄƒng kÃ½ thÃ nh cÃ´ng!';
 
         res.status(201).json({
             success: true,
@@ -157,14 +153,14 @@ const signup = async (req, res) => {
         });
         res.status(500).json({
             success: false,
-            message: 'Lỗi đăng ký: ' + error.message,
+            message: 'Lá»—i Ä‘Äƒng kÃ½: ' + error.message,
             error: error.message
         });
     }
 };
 
 /**
- * Đăng nhập
+ * ÄÄƒng nháº­p
  */
 const login = async (req, res) => {
     try {
@@ -172,14 +168,14 @@ const login = async (req, res) => {
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Dữ liệu không hợp lệ',
+                message: 'Dá»¯ liá»‡u khÃ´ng há»£p lá»‡',
                 errors: errors.array()
             });
         }
 
         const { email, password } = req.body;
 
-        // Tìm user theo email với role
+        // TÃ¬m user theo email vá»›i role
         const user = await User.findOne({
             where: { email },
             include: [{
@@ -192,47 +188,47 @@ const login = async (req, res) => {
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: 'Email hoặc mật khẩu không đúng.'
+                message: 'Email hoáº·c máº­t kháº©u khÃ´ng Ä‘Ãºng.'
             });
         }
         if (!user.email_verified) {
             return res.status(403).json({
                 success: false,
-                message: 'Vui lòng xác thực email trước khi đăng nhập.'
+                message: 'Vui lÃ²ng xÃ¡c thá»±c email trÆ°á»›c khi Ä‘Äƒng nháº­p.'
             });
         }
 
         if (!user.is_active) {
             return res.status(403).json({
                 success: false,
-                message: 'Tài khoản đang chờ admin duyệt.'
+                message: 'TÃ i khoáº£n Ä‘ang chá» admin duyá»‡t.'
             });
         }
 
 
-        // Kiểm tra password (dùng instance method)
+        // Kiá»ƒm tra password (dÃ¹ng instance method)
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
             return res.status(401).json({
                 success: false,
-                message: 'Email hoặc mật khẩu không đúng.'
+                message: 'Email hoáº·c máº­t kháº©u khÃ´ng Ä‘Ãºng.'
             });
         }
 
-        // Cập nhật last_login
+        // Cáº­p nháº­t last_login
         await user.update({ last_login: new Date() });
 
-        // Tạo JWT token
+        // Táº¡o JWT token
         const token = jwt.sign(
             { userId: user.id, email: user.email, roleId: user.role_id },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRE || '7d' }
         );
 
-        // Tạo refresh token (lưu vào database)
+        // Táº¡o refresh token (lÆ°u vÃ o database)
         const refreshToken = crypto.randomBytes(64).toString('hex');
         const refreshTokenExpiry = new Date();
-        refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 30); // 30 ngày
+        refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 30); // 30 ngÃ y
 
         await RefreshToken.create({
             user_id: user.id,
@@ -242,7 +238,7 @@ const login = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Đăng nhập thành công!',
+            message: 'ÄÄƒng nháº­p thÃ nh cÃ´ng!',
             data: {
                 user: {
                     id: user.id,
@@ -259,19 +255,19 @@ const login = async (req, res) => {
         console.error('Login error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi đăng nhập. Vui lòng thử lại sau.'
+            message: 'Lá»—i Ä‘Äƒng nháº­p. Vui lÃ²ng thá»­ láº¡i sau.'
         });
     }
 };
 
 /**
- * Đăng xuất
+ * ÄÄƒng xuáº¥t
  */
 const logout = async (req, res) => {
     try {
         const refreshToken = req.body.refreshToken;
 
-        // Xóa refresh token khỏi database
+        // XÃ³a refresh token khá»i database
         if (refreshToken) {
             await RefreshToken.destroy({
                 where: { token: refreshToken }
@@ -280,13 +276,13 @@ const logout = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Đăng xuất thành công!'
+            message: 'ÄÄƒng xuáº¥t thÃ nh cÃ´ng!'
         });
     } catch (error) {
         console.error('Logout error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi đăng xuất. Vui lòng thử lại sau.'
+            message: 'Lá»—i Ä‘Äƒng xuáº¥t. Vui lÃ²ng thá»­ láº¡i sau.'
         });
     }
 };
@@ -301,11 +297,11 @@ const refreshToken = async (req, res) => {
         if (!refreshToken) {
             return res.status(400).json({
                 success: false,
-                message: 'Refresh token không được để trống.'
+                message: 'Refresh token khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng.'
             });
         }
 
-        // Kiểm tra refresh token trong database
+        // Kiá»ƒm tra refresh token trong database
         const tokenData = await RefreshToken.findOne({
             where: { token: refreshToken }
         });
@@ -313,32 +309,32 @@ const refreshToken = async (req, res) => {
         if (!tokenData) {
             return res.status(401).json({
                 success: false,
-                message: 'Refresh token không hợp lệ.'
+                message: 'Refresh token khÃ´ng há»£p lá»‡.'
             });
         }
 
-        // Kiểm tra token đã hết hạn chưa
+        // Kiá»ƒm tra token Ä‘Ã£ háº¿t háº¡n chÆ°a
         if (new Date() > new Date(tokenData.expires_at)) {
             await RefreshToken.destroy({
                 where: { token: refreshToken }
             });
             return res.status(401).json({
                 success: false,
-                message: 'Refresh token đã hết hạn.'
+                message: 'Refresh token Ä‘Ã£ háº¿t háº¡n.'
             });
         }
 
-        // Lấy thông tin user
+        // Láº¥y thÃ´ng tin user
         const user = await User.findByPk(tokenData.user_id);
 
         if (!user || !user.is_active) {
             return res.status(401).json({
                 success: false,
-                message: 'Người dùng không hợp lệ.'
+                message: 'NgÆ°á»i dÃ¹ng khÃ´ng há»£p lá»‡.'
             });
         }
 
-        // Tạo JWT token mới
+        // Táº¡o JWT token má»›i
         const newToken = jwt.sign(
             { userId: user.id, email: user.email, roleId: user.role_id },
             process.env.JWT_SECRET,
@@ -355,13 +351,13 @@ const refreshToken = async (req, res) => {
         console.error('Refresh token error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi refresh token.'
+            message: 'Lá»—i refresh token.'
         });
     }
 };
 
 /**
- * Quên mật khẩu - Gửi email reset
+ * QuÃªn máº­t kháº©u - Gá»­i email reset
  */
 const forgotPassword = async (req, res) => {
     try {
@@ -369,33 +365,33 @@ const forgotPassword = async (req, res) => {
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Email không hợp lệ.',
+                message: 'Email khÃ´ng há»£p lá»‡.',
                 errors: errors.array()
             });
         }
 
         const { email } = req.body;
 
-        // Tìm user theo email
+        // TÃ¬m user theo email
         const user = await User.findOne({
             where: { email },
             attributes: ['id', 'email', 'full_name']
         });
 
-        // Luôn trả về success để tránh email enumeration attack
+        // LuÃ´n tráº£ vá» success Ä‘á»ƒ trÃ¡nh email enumeration attack
         if (!user) {
             return res.json({
                 success: true,
-                message: 'Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu.'
+                message: 'Náº¿u email tá»“n táº¡i, chÃºng tÃ´i Ä‘Ã£ gá»­i link Ä‘áº·t láº¡i máº­t kháº©u.'
             });
         }
 
-        // Tạo reset token
+        // Táº¡o reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 1); // Hết hạn sau 1 giờ
+        expiresAt.setHours(expiresAt.getHours() + 1); // Háº¿t háº¡n sau 1 giá»
 
-        // Lưu token vào database (tìm và cập nhật hoặc tạo mới)
+        // LÆ°u token vÃ o database (tÃ¬m vÃ  cáº­p nháº­t hoáº·c táº¡o má»›i)
         const existingReset = await PasswordReset.findOne({
             where: { user_id: user.id }
         });
@@ -415,29 +411,29 @@ const forgotPassword = async (req, res) => {
             });
         }
 
-        // Gửi email reset password
+        // Gá»­i email reset password
         try {
             (user.email, user.full_name, resetToken);
         } catch (emailError) {
             console.error('Email sending error:', emailError);
-            // Vẫn trả về success để không lộ thông tin
+            // Váº«n tráº£ vá» success Ä‘á»ƒ khÃ´ng lá»™ thÃ´ng tin
         }
 
         res.json({
             success: true,
-            message: 'Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu.'
+            message: 'Náº¿u email tá»“n táº¡i, chÃºng tÃ´i Ä‘Ã£ gá»­i link Ä‘áº·t láº¡i máº­t kháº©u.'
         });
     } catch (error) {
         console.error('Forgot password error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi xử lý yêu cầu. Vui lòng thử lại sau.'
+            message: 'Lá»—i xá»­ lÃ½ yÃªu cáº§u. Vui lÃ²ng thá»­ láº¡i sau.'
         });
     }
 };
 
 /**
- * Đặt lại mật khẩu với token
+ * Äáº·t láº¡i máº­t kháº©u vá»›i token
  */
 const resetPassword = async (req, res) => {
     try {
@@ -445,14 +441,14 @@ const resetPassword = async (req, res) => {
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Dữ liệu không hợp lệ',
+                message: 'Dá»¯ liá»‡u khÃ´ng há»£p lá»‡',
                 errors: errors.array()
             });
         }
 
         const { token, newPassword } = req.body;
 
-        // Tìm reset token trong database
+        // TÃ¬m reset token trong database
         const resetTokenData = await PasswordReset.findOne({
             where: { token }
         });
@@ -460,55 +456,55 @@ const resetPassword = async (req, res) => {
         if (!resetTokenData) {
             return res.status(400).json({
                 success: false,
-                message: 'Token đặt lại mật khẩu không hợp lệ.'
+                message: 'Token Ä‘áº·t láº¡i máº­t kháº©u khÃ´ng há»£p lá»‡.'
             });
         }
 
-        // Kiểm tra token đã được sử dụng chưa
+        // Kiá»ƒm tra token Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng chÆ°a
         if (resetTokenData.used) {
             return res.status(400).json({
                 success: false,
-                message: 'Token này đã được sử dụng. Vui lòng yêu cầu token mới.'
+                message: 'Token nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng. Vui lÃ²ng yÃªu cáº§u token má»›i.'
             });
         }
 
-        // Kiểm tra token đã hết hạn chưa
+        // Kiá»ƒm tra token Ä‘Ã£ háº¿t háº¡n chÆ°a
         if (new Date() > new Date(resetTokenData.expires_at)) {
             return res.status(400).json({
                 success: false,
-                message: 'Token đã hết hạn. Vui lòng yêu cầu token mới.'
+                message: 'Token Ä‘Ã£ háº¿t háº¡n. Vui lÃ²ng yÃªu cáº§u token má»›i.'
             });
         }
 
-        // Lấy user và cập nhật password (sẽ tự động hash bởi hook)
+        // Láº¥y user vÃ  cáº­p nháº­t password (sáº½ tá»± Ä‘á»™ng hash bá»Ÿi hook)
         const user = await User.findByPk(resetTokenData.user_id);
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: 'Người dùng không tồn tại.'
+                message: 'NgÆ°á»i dÃ¹ng khÃ´ng tá»“n táº¡i.'
             });
         }
 
-        await user.update({ password: newPassword }); // Hook sẽ hash password
+        await user.update({ password: newPassword }); // Hook sáº½ hash password
 
-        // Đánh dấu token đã được sử dụng
+        // ÄÃ¡nh dáº¥u token Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng
         await resetTokenData.update({ used: true });
 
         res.json({
             success: true,
-            message: 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.'
+            message: 'Äáº·t láº¡i máº­t kháº©u thÃ nh cÃ´ng! Vui lÃ²ng Ä‘Äƒng nháº­p láº¡i.'
         });
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi đặt lại mật khẩu. Vui lòng thử lại sau.'
+            message: 'Lá»—i Ä‘áº·t láº¡i máº­t kháº©u. Vui lÃ²ng thá»­ láº¡i sau.'
         });
     }
 };
 
 /**
- * Lấy thông tin user hiện tại
+ * Láº¥y thÃ´ng tin user hiá»‡n táº¡i
  */
 const getMe = async (req, res) => {
     try {
@@ -524,7 +520,7 @@ const getMe = async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'Không tìm thấy người dùng.'
+                message: 'KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng.'
             });
         }
 
@@ -549,7 +545,7 @@ const getMe = async (req, res) => {
         console.error('Get me error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi lấy thông tin người dùng.'
+            message: 'Lá»—i láº¥y thÃ´ng tin ngÆ°á»i dÃ¹ng.'
         });
     }
 };
@@ -560,18 +556,18 @@ const verifyEmail = async (req, res) => {
         if (!token) {
             return res.status(400).json({
                 success: false,
-                message: 'Thiếu token xác thực.'
+                message: 'Thiáº¿u token xÃ¡c thá»±c.'
             });
         }
 
-        // 🔹 Tìm user theo token
+        // ðŸ”¹ TÃ¬m user theo token
         const user = await User.findOne({
             where: { email_verify_token: token }
         });
 
-        // 🔹 Nếu không tìm thấy user theo token
+        // ðŸ”¹ Náº¿u khÃ´ng tÃ¬m tháº¥y user theo token
         if (!user) {
-            // 👉 Có thể user đã verify trước đó
+            // ðŸ‘‰ CÃ³ thá»ƒ user Ä‘Ã£ verify trÆ°á»›c Ä‘Ã³
             const verifiedUser = await User.findOne({
                 where: { email_verified: true }
             });
@@ -579,25 +575,25 @@ const verifyEmail = async (req, res) => {
             if (verifiedUser) {
                 return res.json({
                     success: true,
-                    message: 'Email đã được xác thực trước đó.'
+                    message: 'Email Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c thá»±c trÆ°á»›c Ä‘Ã³.'
                 });
             }
 
             return res.status(400).json({
                 success: false,
-                message: 'Token xác thực không hợp lệ hoặc đã hết hạn.'
+                message: 'Token xÃ¡c thá»±c khÃ´ng há»£p lá»‡ hoáº·c Ä‘Ã£ háº¿t háº¡n.'
             });
         }
 
-        // 🔹 Token hết hạn
+        // ðŸ”¹ Token háº¿t háº¡n
         if (new Date() > user.email_verify_expires) {
             return res.status(400).json({
                 success: false,
-                message: 'Token xác thực đã hết hạn.'
+                message: 'Token xÃ¡c thá»±c Ä‘Ã£ háº¿t háº¡n.'
             });
         }
 
-        // 🔹 Verify
+        // ðŸ”¹ Verify
         await user.update({
             email_verified: true,
             email_verify_token: null,
@@ -606,13 +602,13 @@ const verifyEmail = async (req, res) => {
 
         return res.json({
             success: true,
-            message: 'Xác thực email thành công! Bạn có thể đăng nhập.'
+            message: 'XÃ¡c thá»±c email thÃ nh cÃ´ng! Báº¡n cÃ³ thá»ƒ Ä‘Äƒng nháº­p.'
         });
     } catch (err) {
         console.error(err);
         return res.status(500).json({
             success: false,
-            message: 'Lỗi xác thực email.'
+            message: 'Lá»—i xÃ¡c thá»±c email.'
         });
     }
 };
@@ -627,7 +623,7 @@ const updateMe = async (req, res) => {
         });
 
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+            return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng' });
         }
 
         // Update user base info
@@ -661,7 +657,7 @@ const updateMe = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Cập nhật hồ sơ thành công',
+            message: 'Cáº­p nháº­t há»“ sÆ¡ thÃ nh cÃ´ng',
             data: {
                 user: {
                     id: updatedUser.id,
@@ -679,7 +675,7 @@ const updateMe = async (req, res) => {
         });
     } catch (error) {
         console.error('Update me error:', error);
-        res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ' });
+        res.status(500).json({ success: false, message: 'Lá»—i cáº­p nháº­t há»“ sÆ¡' });
     }
 };
 
@@ -692,7 +688,7 @@ const uploadLicense = async (req, res) => {
         if (!lawyer) {
             return res.status(404).json({
                 success: false,
-                message: 'Không tìm thấy hồ sơ luật sư'
+                message: 'KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡ luáº­t sÆ°'
             });
         }
 
@@ -702,12 +698,12 @@ const uploadLicense = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Upload chứng chỉ thành công, chờ admin xét duyệt'
+            message: 'Upload chá»©ng chá»‰ thÃ nh cÃ´ng, chá» admin xÃ©t duyá»‡t'
         });
     } catch (err) {
         res.status(500).json({
             success: false,
-            message: 'Lỗi upload chứng chỉ'
+            message: 'Lá»—i upload chá»©ng chá»‰'
         });
     }
 };
@@ -719,7 +715,7 @@ const changePassword = async (req, res) => {
         if (!currentPassword || !newPassword) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng cung cấp mật khẩu cũ và mật khẩu mới.'
+                message: 'Vui lÃ²ng cung cáº¥p máº­t kháº©u cÅ© vÃ  máº­t kháº©u má»›i.'
             });
         }
 
@@ -727,32 +723,32 @@ const changePassword = async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'Không tìm thấy người dùng.'
+                message: 'KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng.'
             });
         }
 
-        // Kiểm tra mật khẩu cũ
+        // Kiá»ƒm tra máº­t kháº©u cÅ©
         const isMatch = await user.comparePassword(currentPassword);
         if (!isMatch) {
             return res.status(400).json({
                 success: false,
-                message: 'Mật khẩu cũ không chính xác.'
+                message: 'Máº­t kháº©u cÅ© khÃ´ng chÃ­nh xÃ¡c.'
             });
         }
 
-        // Cập nhật mật khẩu mới (hook beforeUpdate sẽ tự hash)
+        // Cáº­p nháº­t máº­t kháº©u má»›i (hook beforeUpdate sáº½ tá»± hash)
         user.password = newPassword;
         await user.save();
 
         res.json({
             success: true,
-            message: 'Đổi mật khẩu thành công.'
+            message: 'Äá»•i máº­t kháº©u thÃ nh cÃ´ng.'
         });
     } catch (error) {
         console.error('Change password error:', error);
         res.status(500).json({
             success: false,
-            message: 'Lỗi đổi mật khẩu.'
+            message: 'Lá»—i Ä‘á»•i máº­t kháº©u.'
         });
     }
 };
@@ -776,7 +772,7 @@ const updateFcmToken = async (req, res) => {
         const { fcmToken } = req.body;
         if (!fcmToken) return res.status(400).json({ success: false, message: 'Thi?u FCM Token.' });
         await User.update({ fcm_token: fcmToken }, { where: { id: req.user.id } });
-        res.json({ success: true, message: 'C?p nh?t FCM Token th�nh c�ng.' });
+        res.json({ success: true, message: 'C?p nh?t FCM Token thï¿½nh cï¿½ng.' });
     } catch (error) {
         console.error('Update FCM token error:', error);
         res.status(500).json({ success: false, message: 'L?i c?p nh?t FCM Token.' });
@@ -785,3 +781,4 @@ const updateFcmToken = async (req, res) => {
 
 // Re-defining exports at the bottom since appending is easier
 module.exports = { ...module.exports, updateFcmToken };
+
