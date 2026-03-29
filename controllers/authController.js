@@ -92,7 +92,7 @@ const signup = async (req, res) => {
 
         // ===== GỬI EMAIL VERIFY =====
         try {
-            await sendVerifyEmail(
+            (
                 newUser.email,
                 newUser.full_name,
                 verifyUrl
@@ -417,7 +417,7 @@ const forgotPassword = async (req, res) => {
 
         // Gửi email reset password
         try {
-            await sendPasswordResetEmail(user.email, user.full_name, resetToken);
+            (user.email, user.full_name, resetToken);
         } catch (emailError) {
             console.error('Email sending error:', emailError);
             // Vẫn trả về success để không lộ thông tin
@@ -776,7 +776,7 @@ const updateFcmToken = async (req, res) => {
         const { fcmToken } = req.body;
         if (!fcmToken) return res.status(400).json({ success: false, message: 'Thi?u FCM Token.' });
         await User.update({ fcm_token: fcmToken }, { where: { id: req.user.id } });
-        res.json({ success: true, message: 'C?p nh?t FCM Token th�nh c�ng.' });
+        res.json({ success: true, message: 'C?p nh?t FCM Token th�nh c�ng.' });
     } catch (error) {
         console.error('Update FCM token error:', error);
         res.status(500).json({ success: false, message: 'L?i c?p nh?t FCM Token.' });

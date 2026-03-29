@@ -324,7 +324,7 @@ const negotiateLawyer = async (req, res) => {
     }
 
     // Send negotiation email
-    await sendNegotiationEmail(lawyer.user.email, lawyer.user.full_name, message);
+    (lawyer.user.email, lawyer.user.full_name, message);
 
     // Update verification notes to log negotiation
     await lawyer.update({

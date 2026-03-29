@@ -70,26 +70,24 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
     }
 };
 const sendVerifyEmail = async (email, fullName, verifyUrl) => {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-        console.log('📧 [MOCK EMAIL] Verify Email');
-        console.log(`Verify link: ${verifyUrl}`);
-        return;
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.log('?? [MOCK EMAIL] Verify Email');
+            console.log('Verify link: ' + verifyUrl);
+            return;
+        }
+
+        const transporter = createTransporter();
+
+        await transporter.sendMail({
+            from: '"Lawyer Platform" <' + (process.env.EMAIL_FROM || process.env.EMAIL_USER) + '>',
+            to: email,
+            subject: 'X�c th?c email t�i kho?n',
+            html: '<h2>X�c th?c email</h2><p>Xin ch�o <b>' + fullName + '</b>,</p><p>Vui l�ng click v�o link b�n du?i d? x�c th?c email:</p><a href="' + verifyUrl + '">X�c th?c email</a><p>Link c� hi?u l?c trong 24 gi?.</p>'
+        });
+    } catch (error) {
+        console.error('L?i g?i email verify:', error);
     }
-
-    const transporter = createTransporter();
-
-    await transporter.sendMail({
-        from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-        to: email,
-        subject: 'Xác thực email tài khoản',
-        html: `
-            <h2>Xác thực email</h2>
-            <p>Xin chào <b>${fullName}</b>,</p>
-            <p>Vui lòng click vào link bên dưới để xác thực email:</p>
-            <a href="${verifyUrl}">Xác thực email</a>
-            <p>Link có hiệu lực trong 24 giờ.</p>
-        `
-    });
 };
 
 /**
@@ -292,4 +290,5 @@ module.exports = {
     sendInquiryResolvedEmail,
     sendNegotiationEmail
 };
+
 
