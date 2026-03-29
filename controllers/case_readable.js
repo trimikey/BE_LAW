@@ -1,0 +1,637 @@
+﻿const { Case, CaseStep, Document, User, Lawyer, Role, Payment } = require('../models');
+
+const { createPayOSLink, getPayOSPaymentStatus } = require('../services/payos.service');
+
+const { Op } = require('sequelize');
+
+
+// Láº¥y chi tiáº¿t case vá»›i steps vÃ  documents
+const getCaseById = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+
+        const userId = req.user.id;
+
+
+        // Láº¥y role name tá»« database
+        const user = await User.findByPk(userId, {
+            attributes: ['id', 'role_id']
+        });
+
+
+        if (!user || !user.role_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y quyá»n cá»§a ngÆ°á»i dÃ¹ng'
+            });
+
+        }
+
+        const role = await Role.findByPk(user.role_id, {
+            attributes: ['name']
+        });
+
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y quyá»n cá»§a ngÆ°á»i dÃ¹ng'
+            });
+
+        }
+
+        const userRole = role.name;
+
+
+        // Kiá»ƒm tra quyá»n truy cáº­p
+        const caseRecord = await Case.findOne({
+            where: { id: caseId },
+            include: [
+                { model: User, as: 'client', attributes: ['id', 'full_name', 'email'] },
+                {
+                    model: User,
+                    as: 'lawyer',
+                    attributes: ['id', 'full_name', 'email'],
+                    include: [{ model: Lawyer, as: 'lawyer', attributes: ['law_firm', 'specialties'] }]
+                }
+            ]
+        });
+
+
+        if (!caseRecord) {
+            return res.status(404).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y vá»¥ viá»‡c'
+            });
+
+        }
+
+        // Kiá»ƒm tra quyá»n: client chá»‰ xem case cá»§a mÃ¬nh, lawyer chá»‰ xem case Ä‘Æ°á»£c gÃ¡n
+        if (userRole === 'client' && caseRecord.client_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng cÃ³ quyá»n truy cáº­p vá»¥ viá»‡c nÃ y'
+            });
+
+        }
+
+        if (userRole === 'lawyer' && caseRecord.lawyer_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng cÃ³ quyá»n truy cáº­p vá»¥ viá»‡c nÃ y'
+            });
+
+        }
+
+        // Láº¥y steps
+        const steps = await CaseStep.findAll({
+            where: {
+                case_id: caseId,
+                ...(userRole === 'client' ? { client_visible: true } : {})
+            },
+            include: [
+                {
+                    model: User,
+                    as: 'assignedUser',
+                    attributes: ['id', 'full_name', 'email']
+                },
+                {
+                    model: Document,
+                    as: 'stepDocuments',
+                    include: [{ model: User, as: 'uploader', attributes: ['id', 'full_name'] }]
+                }
+            ],
+            order: [['step_order', 'ASC']]
+        });
+
+
+        // Láº¥y documents
+        const documents = await Document.findAll({
+            where: { case_id: caseId },
+            include: [
+                {
+                    model: User,
+                    as: 'uploader',
+                    attributes: ['id', 'full_name', 'email']
+                }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+
+
+        // TÃ­nh progress vÃ  tÃ i chÃ­nh
+        const totalSteps = steps.length;
+
+        const completedSteps = steps.filter(s => s.status === 'completed').length;
+
+        const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+
+
+        const totalPaid = steps
+            .filter(s => s.payment_status === 'paid')
+            .reduce((sum, s) => sum + Number(s.fee_amount || 0), 0);
+
+
+        const totalEstimatedFee = steps
+            .reduce((sum, s) => sum + Number(s.fee_amount || 0), 0);
+
+
+        res.json({
+            success: true,
+            data: {
+                case: caseRecord,
+                steps,
+                documents,
+                progress: {
+                    total: totalSteps,
+                    completed: completedSteps,
+                    percentage: progress
+                },
+                finance: {
+                    totalPaid,
+                    totalEstimatedFee,
+                    budget: caseRecord.estimated_fee
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error getting case:', error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Lá»—i khi láº¥y thÃ´ng tin vá»¥ viá»‡c'
+        });
+
+    }
+};
+
+
+// Táº¡o steps máº·c Ä‘á»‹nh cho case
+const initializeCaseSteps = async (caseId, caseType = 'consultation') => {
+    const defaultSteps = [
+        { step_name: 'INTAKE', step_order: 1, description: 'Thu tháº­p thÃ´ng tin vÃ  tiáº¿p nháº­n vá»¥ viá»‡c ban Ä‘áº§u' },
+        { step_name: 'DOCUMENT REVIEW', step_order: 2, description: 'RÃ  soÃ¡t tÃ i liá»‡u vÃ  kiá»ƒm tra báº±ng chá»©ng há»“ sÆ¡' },
+        { step_name: 'ASSESSMENT', step_order: 3, description: 'ÄÃ¡nh giÃ¡ phÃ¡p lÃ½ vÃ  phÃ¢n tÃ­ch rá»§i ro tiá»m áº©n' },
+        { step_name: 'PREPARATION', step_order: 4, description: 'Chuáº©n bá»‹ tÃ i liá»‡u phÃ¡p lÃ½ vÃ  phÆ°Æ¡ng Ã¡n xá»­ lÃ½' },
+        { step_name: 'SUBMISSION', step_order: 5, description: 'Ná»™p há»“ sÆ¡ vÃ  lÃ m viá»‡c vá»›i cÆ¡ quan nhÃ  nÆ°á»›c' },
+        { step_name: 'FOLLOW-UP', step_order: 6, description: 'Theo dÃµi hoÃ n táº¥t nghÄ©a vá»¥ vÃ  kháº¯c phá»¥c há»‡ thá»‘ng' }
+    ];
+
+
+    const steps = defaultSteps.map(step => ({
+        ...step,
+        case_id: caseId,
+        status: step.step_order === 1 ? 'in_progress' : 'pending',
+        client_visible: true
+    }));
+
+
+    await CaseStep.bulkCreate(steps);
+
+    return steps;
+
+};
+
+
+// Cáº­p nháº­t step status
+const updateStepStatus = async (req, res) => {
+    try {
+        const { caseId, stepId } = req.params;
+
+        const { status, notes, dueDate, feeAmount, description } = req.body;
+
+        const userId = req.user.id;
+
+
+        const step = await CaseStep.findOne({
+            where: { id: stepId, case_id: caseId },
+            include: [{ model: Case, as: 'case' }]
+        });
+
+
+        if (!step) {
+            return res.status(404).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y bÆ°á»›c nÃ y'
+            });
+
+        }
+
+        // Láº¥y role name tá»« database
+        const user = await User.findByPk(userId, {
+            attributes: ['id', 'role_id']
+        });
+
+
+        if (!user || !user.role_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y quyá»n cá»§a ngÆ°á»i dÃ¹ng'
+            });
+
+        }
+
+        const role = await Role.findByPk(user.role_id, {
+            attributes: ['name']
+        });
+
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y quyá»n cá»§a ngÆ°á»i dÃ¹ng'
+            });
+
+        }
+
+        const userRole = role.name;
+
+        if (userRole === 'client' && step.case.client_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'KhÃ´ng cÃ³ quyá»n cáº­p nháº­t bÆ°á»›c nÃ y'
+            });
+
+        }
+
+        // Cáº­p nháº­t status
+        const updateData = {};
+
+        if (status) updateData.status = status;
+
+        if (notes !== undefined) updateData.notes = notes;
+
+        if (description !== undefined) updateData.description = description;
+
+        if (dueDate) updateData.due_date = dueDate;
+
+
+        // Kiá»ƒm tra giá»›i háº¡n thay Ä‘á»•i phÃ­ (tá»‘i Ä‘a 3 láº§n)
+        if (feeAmount !== undefined && Number(feeAmount) !== Number(step.fee_amount)) {
+            if (step.fee_change_count >= 3) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Báº¡n Ä‘Ã£ thay Ä‘á»•i phÃ­ giai Ä‘oáº¡n nÃ y quÃ¡ 3 láº§n. KhÃ´ng thá»ƒ thay Ä‘á»•i thÃªm.`
+                });
+
+            }
+            updateData.fee_amount = feeAmount;
+
+            updateData.fee_change_count = step.fee_change_count + 1;
+
+        }
+
+        // Tá»± Ä‘á»™ng set started_at vÃ  completed_at
+        if (status === 'in_progress' && !step.started_at) {
+            updateData.started_at = new Date();
+
+        }
+        if (status === 'completed') {
+            // Kiá»ƒm tra rÃ ng buá»™c thanh toÃ¡n náº¿u lÃ  cháº¿ Ä‘á»™ tráº£ theo giai Ä‘oáº¡n
+            if (step.case.payment_mode === 'step_by_step' && step.payment_status !== 'paid' && step.fee_amount > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Giai Ä‘oáº¡n "${step.step_name}" chÆ°a Ä‘Æ°á»£c thanh toÃ¡n. Vui lÃ²ng thanh toÃ¡n ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(step.fee_amount)} Ä‘á»ƒ cÃ³ thá»ƒ hoÃ n thÃ nh vÃ  chuyá»ƒn sang bÆ°á»›c tiáº¿p theo.`
+                });
+
+            }
+
+            if (!step.completed_at) {
+                updateData.completed_at = new Date();
+
+            }
+        }
+
+        await step.update(updateData);
+
+        try { const ns = require("../services/notification.service");
+ const cr = await step.getCase();
+ if(cr) await ns.notifyCaseUpdate(cr, "C?p nh?t ti?n d?", "Giai do?n " + step.step_name + " dã c?p nh?t");
+ } catch(e){}
+
+        // Náº¿u step hoÃ n thÃ nh, tá»± Ä‘á»™ng chuyá»ƒn step tiáº¿p theo sang in_progress
+        if (status === 'completed') {
+            const nextStep = await CaseStep.findOne({
+                where: {
+                    case_id: caseId,
+                    step_order: step.step_order + 1,
+                    status: 'pending'
+                }
+            });
+
+            if (nextStep) {
+                await nextStep.update({
+                    status: 'in_progress',
+                    started_at: new Date()
+                });
+
+            }
+        }
+        await step.reload({
+            include: [{ model: User, as: 'assignedUser', attributes: ['id', 'full_name', 'email'] }]
+        });
+
+
+        res.json({
+            success: true,
+            message: 'Cáº­p nháº­t bÆ°á»›c thÃ nh cÃ´ng',
+            data: { step }
+        });
+
+    } catch (error) {
+        console.error('Error updating step:', error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Lá»—i khi cáº­p nháº­t bÆ°á»›c'
+        });
+
+    }
+};
+
+
+// GÃ¡n step cho user
+const assignStep = async (req, res) => {
+    try {
+        const { caseId, stepId } = req.params;
+
+        const { assignedTo } = req.body;
+
+
+        const step = await CaseStep.findOne({
+            where: { id: stepId, case_id: caseId }
+        });
+
+
+        if (!step) {
+            return res.status(404).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y bÆ°á»›c nÃ y'
+            });
+
+        }
+
+        await step.update({ assigned_to: assignedTo });
+
+
+        res.json({
+            success: true,
+            message: 'GÃ¡n bÆ°á»›c thÃ nh cÃ´ng',
+            data: { step }
+        });
+
+    } catch (error) {
+        console.error('Error assigning step:', error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Lá»—i khi gÃ¡n bÆ°á»›c'
+        });
+
+    }
+};
+
+
+// Cáº­p nháº­t tráº¡ng thÃ¡i thanh toÃ¡n cá»§a step (dÃ nh cho lawyer/admin hoáº·c há»‡ thá»‘ng)
+const updateStepPaymentStatus = async (req, res) => {
+    try {
+        const { caseId, stepId } = req.params;
+
+        const { paymentStatus } = req.body;
+
+
+        if (stepId === 'all') {
+            await CaseStep.update(
+                { payment_status: paymentStatus },
+                { where: { case_id: caseId } }
+            );
+
+            return res.json({
+                success: true,
+                message: 'ÄÃ£ cáº­p nháº­t tráº¡ng thÃ¡i thanh toÃ¡n cho táº¥t cáº£ cÃ¡c giai Ä‘oáº¡n'
+            });
+
+        }
+
+        const step = await CaseStep.findOne({
+            where: { id: stepId, case_id: caseId }
+        });
+
+
+        if (!step) {
+            return res.status(404).json({
+                success: false,
+                message: 'KhÃ´ng tÃ¬m tháº¥y bÆ°á»›c nÃ y'
+            });
+
+        }
+
+        await step.update({ payment_status: paymentStatus });
+
+
+        res.json({
+            success: true,
+            message: 'Cáº­p nháº­t tráº¡ng thÃ¡i thanh toÃ¡n thÃ nh cÃ´ng',
+            data: { step }
+        });
+
+    } catch (error) {
+        console.error('Error updating step payment:', error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Lá»—i khi cáº­p nháº­t tráº¡ng thÃ¡i thanh toÃ¡n'
+        });
+
+    }
+};
+
+
+const getStepPaymentLink = async (req, res) => {
+    try {
+        const { caseId, stepId } = req.params;
+
+        const userId = req.user.id;
+
+
+        const caseRecord = await Case.findByPk(caseId);
+
+        if (!caseRecord) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y vá»¥ viá»‡c' });
+
+
+        let amount = 0;
+
+        let description = '';
+
+        let orderCode = Number(Date.now().toString().slice(-9) + Math.floor(Math.random() * 100).toString().padStart(2, '0'));
+
+
+        if (stepId === 'all') {
+            const steps = await CaseStep.findAll({ where: { case_id: caseId, payment_status: 'unpaid' } });
+
+            amount = steps.reduce((sum, s) => sum + Number(s.fee_amount), 0);
+
+            description = `Case ${caseId} Tran goi`.slice(0, 25);
+
+        } else {
+            const step = await CaseStep.findOne({ where: { id: stepId, case_id: caseId } });
+
+            if (!step) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y giai Ä‘oáº¡n' });
+
+            amount = Number(step.fee_amount);
+
+            description = `Case ${caseId} GD ${step.step_order}`.slice(0, 25);
+
+        }
+
+        if (amount <= 0) return res.status(400).json({ success: false, message: 'Sá»‘ tiá»n thanh toÃ¡n pháº£i lá»›n hÆ¡n 0' });
+
+
+        const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+
+        const mobileQuery = req.body.isMobile
+            ? `?mobile=true&type=case&caseId=${encodeURIComponent(caseId)}${stepId ? `&stepId=${encodeURIComponent(stepId)}` : ''}`
+            : '';
+
+        const mobileCancelQuery = req.body.isMobile
+            ? `?cancel=true&mobile=true&type=case&caseId=${encodeURIComponent(caseId)}${stepId ? `&stepId=${encodeURIComponent(stepId)}` : ''}`
+            : '?cancel=true';
+
+
+        const payos = await createPayOSLink({
+            amount,
+            description,
+            orderCode,
+            returnUrl: `${frontendUrl}/payment/payos-return${mobileQuery}`,
+            cancelUrl: `${frontendUrl}/payment/payos-return${mobileCancelQuery}`
+        });
+
+
+        await Payment.create({
+            user_id: userId,
+            case_id: caseId,
+            amount,
+            payment_type: 'case_fee',
+            payment_method: 'payos',
+            status: 'pending',
+            transaction_id: String(orderCode),
+            notes: JSON.stringify({ stepId, caseId })
+        });
+
+
+        res.json({ success: true, data: payos });
+
+    } catch (error) {
+        console.error('Error creating payment link:', error);
+
+        res.status(500).json({ success: false, message: error.message });
+
+    }
+};
+
+
+const verifyStepPayment = async (req, res) => {
+    try {
+        const { orderCode } = req.params;
+
+        const payosData = await getPayOSPaymentStatus(orderCode);
+
+
+        const payment = await Payment.findOne({ where: { transaction_id: String(orderCode) } });
+
+        if (!payment) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch' });
+
+
+        if (payosData.status === 'PAID') {
+            const notes = JSON.parse(payment.notes || '{}');
+
+
+            if (payment.status !== 'completed') {
+                await payment.update({ status: 'completed', payment_date: new Date() });
+
+
+                // Cáº­p nháº­t tráº¡ng thÃ¡i cho step
+                if (notes.stepId === 'all') {
+                    await CaseStep.update(
+                        { payment_status: 'paid' },
+                        { where: { case_id: notes.caseId } }
+                    );
+
+                } else {
+                    await CaseStep.update(
+                        { payment_status: 'paid' },
+                        { where: { id: notes.stepId, case_id: notes.caseId } }
+                    );
+
+                }
+            }
+
+            return res.json({ success: true, message: 'Thanh toÃ¡n thÃ nh cÃ´ng' });
+
+        }
+
+        res.json({ success: false, message: 'Giao dá»‹ch chÆ°a hoÃ n táº¥t', status: payosData.status });
+
+    } catch (error) {
+        console.error('Error verifying payment:', error);
+
+        res.status(500).json({ success: false, message: error.message });
+
+    }
+};
+
+
+const updateStepResponse = async (req, res) => {
+    try {
+        const { caseId, stepId } = req.params;
+
+        const { clientResponse, clientData } = req.body;
+
+        const userId = req.user.id;
+
+
+        const caseRecord = await Case.findByPk(caseId);
+
+        if (!caseRecord) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y vá»¥ viá»‡c' });
+
+
+        if (caseRecord.client_id !== userId) {
+            return res.status(403).json({ success: false, message: 'Báº¡n khÃ´ng cÃ³ quyá»n thá»±c hiá»‡n hÃ nh Ä‘á»™ng nÃ y' });
+
+        }
+
+        const step = await CaseStep.findOne({ where: { id: stepId, case_id: caseId } });
+
+        if (!step) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y giai Ä‘oáº¡n' });
+
+
+        await step.update({
+            client_response: clientResponse,
+            client_data: clientData
+        });
+
+
+        res.json({ success: true, message: 'ÄÃ£ cáº­p nháº­t pháº£n há»“i', data: step });
+
+    } catch (error) {
+        console.error('Error updating step response:', error);
+
+        res.status(500).json({ success: false, message: error.message });
+
+    }
+};
+
+
+module.exports = {
+    getCaseById,
+    initializeCaseSteps,
+    updateStepStatus,
+    assignStep,
+    updateStepPaymentStatus,
+    updateStepResponse,
+    getStepPaymentLink,
+    verifyStepPayment
+};
+
+

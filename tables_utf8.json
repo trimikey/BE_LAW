@@ -1,0 +1,56 @@
+﻿[
+  {
+    "Tables_in_railway": "SequelizeMeta"
+  },
+  {
+    "Tables_in_railway": "case_interests"
+  },
+  {
+    "Tables_in_railway": "case_steps"
+  },
+  {
+    "Tables_in_railway": "cases"
+  },
+  {
+    "Tables_in_railway": "consultations"
+  },
+  {
+    "Tables_in_railway": "documents"
+  },
+  {
+    "Tables_in_railway": "inquiries"
+  },
+  {
+    "Tables_in_railway": "lawyer_availabilities"
+  },
+  {
+    "Tables_in_railway": "lawyer_reviews"
+  },
+  {
+    "Tables_in_railway": "lawyers"
+  },
+  {
+    "Tables_in_railway": "messages"
+  },
+  {
+    "Tables_in_railway": "password_resets"
+  },
+  {
+    "Tables_in_railway": "payments"
+  },
+  {
+    "Tables_in_railway": "refresh_tokens"
+  },
+  {
+    "Tables_in_railway": "roles"
+  },
+  {
+    "Tables_in_railway": "sequelizemeta"
+  },
+  {
+    "Tables_in_railway": "users"
+  },
+  {
+    "Tables_in_railway": "video_call_quotas"
+  }
+]
