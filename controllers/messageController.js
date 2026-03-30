@@ -149,7 +149,7 @@ exports.getVideoCallQuota = async (req, res) => {
                 ...quota,
                 package: {
                     seconds: PAID_PACKAGE_SECONDS,
-                    price: PAID_PACKAGE_PRICE
+                    price: quota.dynamicPrice
                 },
                 canPurchase: Number(userId) === Number(quota.clientId)
             }
@@ -195,7 +195,7 @@ exports.purchaseVideoCallPackage = async (req, res) => {
                     orderCode: payos.orderCode,
                     package: {
                         seconds: PAID_PACKAGE_SECONDS,
-                        price: PAID_PACKAGE_PRICE
+                        price: payos.amount || PAID_PACKAGE_PRICE
                     }
                 }
             });
@@ -213,7 +213,7 @@ exports.purchaseVideoCallPackage = async (req, res) => {
                     orderId: momo.orderId,
                     package: {
                         seconds: PAID_PACKAGE_SECONDS,
-                        price: PAID_PACKAGE_PRICE
+                        price: momo.amount || PAID_PACKAGE_PRICE
                     }
                 }
             });
@@ -228,7 +228,7 @@ exports.purchaseVideoCallPackage = async (req, res) => {
                 ...result,
                 package: {
                     seconds: PAID_PACKAGE_SECONDS,
-                    price: PAID_PACKAGE_PRICE
+                    price: result.amount || PAID_PACKAGE_PRICE
                 }
             }
         });

@@ -187,7 +187,7 @@ const getDashboardStats = async (req, res) => {
         const consultationsThisMonth = await Consultation.findAll({
             where: {
                 lawyer_id: lawyerId,
-                status: { [Op.in]: ['confirmed', 'completed'] },
+                status: { [Op.in]: ['confirmed', 'completed', 'in_progress'] },
                 scheduled_at: {
                     [Op.gte]: monthStart,
                     [Op.lt]: nextMonthStart

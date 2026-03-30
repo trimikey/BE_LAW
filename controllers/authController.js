@@ -63,7 +63,7 @@ const signup = async (req, res) => {
             if (existingLawyer) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Sá»‘ tháº» luáº­t sÆ° nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng.'
+                    message: 'Số thẻ luật sư này đã được sử dụng.'
                 });
             }
         }

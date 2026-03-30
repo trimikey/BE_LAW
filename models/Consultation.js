@@ -52,7 +52,7 @@ const Consultation = sequelize.define('Consultation', {
         comment: 'Loại tư vấn'
     },
     status: {
-        type: DataTypes.ENUM('pending', 'confirmed', 'completed', 'cancelled', 'no_show'),
+        type: DataTypes.ENUM('pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'),
         allowNull: false,
         defaultValue: 'pending',
         comment: 'Trạng thái'

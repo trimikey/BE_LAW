@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { sequelize, User, Role, VideoCallQuota, Payment, Consultation, LawyerAvailability } = require('../models');
+const { sequelize, User, Role, Lawyer, VideoCallQuota, Payment, Consultation, LawyerAvailability } = require('../models');
 const crypto = require('crypto');
 
 const FREE_CALL_SECONDS = 5 * 60;
@@ -96,10 +96,18 @@ const grantOneHourPackage = async ({ clientId, lawyerId, transaction }) => {
 const getQuotaStatusForUsers = async (userId, partnerId) => {
   const { clientId, lawyerId } = await resolveClientLawyerPair(userId, partnerId);
   const quota = await findOrCreateQuota(clientId, lawyerId, null, false);
+  
+  const lawyer = await Lawyer.findOne({
+    where: { user_id: lawyerId },
+    attributes: ['consultation_fee']
+  });
+  const dynamicPrice = lawyer && lawyer.consultation_fee ? Math.round(Number(lawyer.consultation_fee)) : PAID_PACKAGE_PRICE;
+
   return {
     clientId,
     lawyerId,
-    ...computeQuotaStatus(quota)
+    ...computeQuotaStatus(quota),
+    dynamicPrice
   };
 };
 
@@ -152,12 +160,19 @@ const purchaseOneHourPackage = async ({ buyerId, partnerId, paymentMethod = 'e_w
 
     const quota = await grantOneHourPackage({ clientId, lawyerId, transaction });
 
+    const lawyer = await Lawyer.findOne({
+      where: { user_id: lawyerId },
+      attributes: ['consultation_fee'],
+      transaction
+    });
+    const amount = lawyer && lawyer.consultation_fee ? Math.round(Number(lawyer.consultation_fee)) : PAID_PACKAGE_PRICE;
+
     await Payment.create(
       {
         user_id: clientId,
         case_id: null,
         consultation_id: null,
-        amount: PAID_PACKAGE_PRICE,
+        amount: amount,
         payment_type: 'consultation',
         payment_method: normalizePaymentMethod(paymentMethod),
         status: 'completed',
@@ -171,7 +186,8 @@ const purchaseOneHourPackage = async ({ buyerId, partnerId, paymentMethod = 'e_w
     return {
       clientId,
       lawyerId,
-      ...computeQuotaStatus(quota)
+      ...computeQuotaStatus(quota),
+      amount
     };
   });
 };
@@ -255,12 +271,19 @@ const createMomoVideoPackagePayment = async ({ buyerId, partnerId, slotId = null
       })
     ).toString('base64');
 
+    const lawyer = await Lawyer.findOne({
+      where: { user_id: lawyerId },
+      attributes: ['consultation_fee'],
+      transaction
+    });
+    const amount = lawyer && lawyer.consultation_fee ? Math.round(Number(lawyer.consultation_fee)) : PAID_PACKAGE_PRICE;
+
     const payload = {
       partnerCode,
       partnerName: 'Lawyer Platform',
       storeId: 'LawyerPlatform',
       requestId,
-      amount: String(PAID_PACKAGE_PRICE),
+      amount: String(amount),
       orderId,
       orderInfo: `Nap 1 gio goi video cho luat su ${lawyerId}`,
       redirectUrl,
@@ -278,7 +301,7 @@ const createMomoVideoPackagePayment = async ({ buyerId, partnerId, slotId = null
         user_id: clientId,
         case_id: null,
         consultation_id: null,
-        amount: PAID_PACKAGE_PRICE,
+        amount: amount,
         payment_type: 'consultation',
         // Keep DB-compatible enum value even if schema has not been migrated yet.
         payment_method: 'e_wallet',
@@ -316,7 +339,8 @@ const createMomoVideoPackagePayment = async ({ buyerId, partnerId, slotId = null
     return {
       payUrl: momoData.payUrl,
       orderId,
-      requestId
+      requestId,
+      amount
     };
   });
 };
@@ -401,8 +425,8 @@ const confirmMomoVideoPackagePayment = async ({ buyerId, orderId, resultCode, tr
             duration,
             consultation_type: slot.consultation_type || 'video',
             status: 'confirmed',
-            fee: PAID_PACKAGE_PRICE,
-            notes: 'Tạo tự động từ thanh toán MoMo gói video 60 phút'
+            fee: payment.amount || PAID_PACKAGE_PRICE,
+            notes: `Tạo tự động từ thanh toán MoMo gói video 1 giờ`
           },
           { transaction }
         );
@@ -480,9 +504,16 @@ const createPayOSVideoPackagePayment = async ({ buyerId, partnerId, slotId = nul
     const returnUrl = successUrl;
     const cancelUrl = failUrl;
 
+    const lawyer = await Lawyer.findOne({
+      where: { user_id: pair.lawyerId },
+      attributes: ['consultation_fee'],
+      transaction
+    });
+    const amount = lawyer && lawyer.consultation_fee ? Math.round(Number(lawyer.consultation_fee)) : PAID_PACKAGE_PRICE;
+
     const signature = buildPayOSSignature(
       {
-        amount: PAID_PACKAGE_PRICE,
+        amount: amount,
         cancelUrl,
         description,
         orderCode,
@@ -496,7 +527,7 @@ const createPayOSVideoPackagePayment = async ({ buyerId, partnerId, slotId = nul
         user_id: pair.clientId,
         case_id: null,
         consultation_id: null,
-        amount: PAID_PACKAGE_PRICE,
+        amount: amount,
         payment_type: 'consultation',
         payment_method: 'e_wallet',
         status: 'pending',
@@ -516,7 +547,7 @@ const createPayOSVideoPackagePayment = async ({ buyerId, partnerId, slotId = nul
 
     const payload = {
       orderCode,
-      amount: PAID_PACKAGE_PRICE,
+      amount: amount,
       description,
       returnUrl,
       cancelUrl,
@@ -524,7 +555,7 @@ const createPayOSVideoPackagePayment = async ({ buyerId, partnerId, slotId = nul
         {
           name: 'Goi video 1 gio',
           quantity: 1,
-          price: PAID_PACKAGE_PRICE
+          price: amount
         }
       ],
       expiredAt: Math.floor(Date.now() / 1000) + 15 * 60,
@@ -553,7 +584,8 @@ const createPayOSVideoPackagePayment = async ({ buyerId, partnerId, slotId = nul
     return {
       checkoutUrl: payosData.data.checkoutUrl,
       qrCode: payosData.data.qrCode || null,
-      orderCode: orderCodeStr
+      orderCode: orderCodeStr,
+      amount
     };
   });
 };
@@ -663,8 +695,8 @@ const confirmPayOSVideoPackagePayment = async ({
             duration,
             consultation_type: slot.consultation_type || 'video',
             status: 'confirmed',
-            fee: PAID_PACKAGE_PRICE,
-            notes: 'Tạo tự động từ thanh toán gói video 60 phút'
+            fee: payment.amount || PAID_PACKAGE_PRICE,
+            notes: `Tạo tự động từ thanh toán gói video 1 giờ`
           },
           { transaction }
         );
@@ -744,8 +776,25 @@ const autoExpireConsultations = async () => {
   const { Op } = require('sequelize');
 
   try {
-    // 1. Tìm các lịch hẹn 'confirmed' đã quá 30 phút so với scheduled_at
-    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const now = new Date();
+    const thirtyMinsAgo = new Date(now.getTime() - 30 * 60 * 1000);
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+    // 1. Cleanup 'pending' consultations that are stale (older than 2h)
+    const [pendingCancelledCount] = await Consultation.update(
+      { status: 'cancelled', notes: (sequelize.literal("CONCAT(COALESCE(notes, ''), ' [Auto-cancelled: Stale pending]')")) },
+      {
+        where: {
+          status: 'pending',
+          scheduled_at: { [Op.lt]: twoHoursAgo }
+        }
+      }
+    );
+    if (pendingCancelledCount > 0) {
+      console.log(`[Cleaner] Cancelled ${pendingCancelledCount} stale pending consultations`);
+    }
+
+    // 2. Tìm các lịch hẹn 'confirmed' đã quá 30 phút so với scheduled_at
     const overdueConsultations = await Consultation.findAll({
       where: {
         status: 'confirmed',
@@ -799,8 +848,9 @@ const markConsultationCompleted = async (callerId, calleeId) => {
   try {
     // Tìm lịch tư vấn 'confirmed' đang gần thời điểm hiện tại nhất của cặp đôi này
     const now = new Date();
-    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-    const twoHoursFuture = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    // Tăng biên độ tìm kiếm lên 4 giờ (2h trước + 2h sau) để linh hoạt hơn
+    const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    const fourHoursFuture = new Date(now.getTime() + 4 * 60 * 60 * 1000);
 
     const activeCons = await Consultation.findOne({
       where: {
@@ -809,7 +859,7 @@ const markConsultationCompleted = async (callerId, calleeId) => {
           { client_id: calleeId, lawyer_id: callerId }
         ],
         status: 'confirmed',
-        scheduled_at: { [Op.between]: [twoHoursAgo, twoHoursFuture] }
+        scheduled_at: { [Op.between]: [fourHoursAgo, fourHoursFuture] }
       },
       order: [['scheduled_at', 'ASC']]
     });
