@@ -75,40 +75,39 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
 const sendVerifyEmail = async (email, fullName, verifyUrl) => {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.log('📧 [MOCK EMAIL] Verify Email');
-            console.log('Verify link: ' + verifyUrl);
+            console.log('⚠️ [MOCK EMAIL] EMAIL_USER/PASS chưa được set. Verify link:', verifyUrl);
             return;
         }
 
         const transporter = createTransporter();
-
+        
+        console.log(`📧 Đang gửi email xác thực đến: ${email}...`);
+        
         await transporter.sendMail({
-            from: '"Lawyer Platform" <' + (process.env.EMAIL_FROM || process.env.EMAIL_USER) + '>',
+            from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
             to: email,
             subject: 'Xác thực email tài khoản',
             html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #2563eb;">Xác thực email</h2>
-                    <p>Xin chào <b>${fullName}</b>,</p>
-                    <p>Vui lòng click vào link bên dưới để xác thực email cho tài khoản của bạn:</p>
-                    <p style="margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 40px; border-radius: 12px;">
+                    <h2 style="color: #041837; font-weight: 800; text-transform: uppercase;">Xác thực tài khoản</h2>
+                    <p style="font-size: 16px; color: #475569;">Xin chào <b>${fullName}</b>,</p>
+                    <p style="line-height: 1.6;">Cảm ơn bạn đã đăng ký tại hệ thống Hiểu Luật. Vui lòng nhấn vào nút bên dưới để xác thực email và bắt đầu sử dụng dịch vụ:</p>
+                    <div style="margin: 30px 0; text-align: center;">
                         <a href="${verifyUrl}" 
-                           style="background-color: #2563eb; color: white; padding: 12px 24px; 
-                                  text-decoration: none; border-radius: 5px; display: inline-block;">
-                            Xác thực email
+                           style="background-color: #041837; color: white; padding: 16px 32px; 
+                                  text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 800; letter-spacing: 1px;">
+                            XÁC THỰC NGAY
                         </a>
-                    </p>
-                    <p>Link có hiệu lực trong 24 giờ.</p>
-                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-                    <p style="color: #999; font-size: 12px;">
-                        Email này được gửi tự động, vui lòng không trả lời.
-                    </p>
+                    </div>
+                    <p style="color: #94a3b8; font-size: 12px; font-style: italic;">Link có hiệu lực trong 24 giờ. Nếu bạn không đăng ký tài khoản, vui lòng bỏ qua email này.</p>
                 </div>
             `
         });
-        console.log('✅ Email xác thực đã được gửi');
+        
+        console.log('✅ Email xác thực đã được gửi thành công!');
     } catch (error) {
-        console.error('❌ Lỗi gửi email verify:', error);
+        console.error('❌ Lỗi SMTP nghiêm trọng:', error.code, error.message);
+        // Đừng throw lỗi ở đây để không làm gián đoạn luồng chính của website
     }
 };
 

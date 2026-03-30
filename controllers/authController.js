@@ -1,4 +1,4 @@
-﻿const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const { User, Role, PasswordReset, RefreshToken, Lawyer } = require('../models');
@@ -87,15 +87,13 @@ const signup = async (req, res) => {
 
         await newUser.update({
             email_verify_token: verifyToken,
-            email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 giá»
+            email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 giá» 
         });
 
-        // ===== Gá»¬I EMAIL VERIFY =====
-        try {
-            await sendVerifyEmail(newUser.email, newUser.full_name, verifyUrl);
-        } catch (emailError) {
-            console.error('Verify email sending error:', emailError);
-        }
+        // ===== GỬI EMAIL VERIFY (Chạy ngầm không đợi để tránh treo UI) =====
+        sendVerifyEmail(newUser.email, newUser.full_name, verifyUrl).catch(err => {
+            console.error('⚠️ Lỗi gửi email xác thực (chạy ngầm):', err.message);
+        });
 
 
         // Náº¿u Ä‘Äƒng kÃ½ lawyer, táº¡o thÃ´ng tin lawyer
