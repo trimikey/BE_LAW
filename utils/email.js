@@ -21,7 +21,6 @@ const createTransporter = () => {
  */
 const sendPasswordResetEmail = async (email, fullName, resetToken) => {
     try {
-        // Nếu không có cấu hình email, chỉ log ra console
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             console.log('📧 [MOCK EMAIL] Password Reset Email:');
             console.log(`To: ${email}`);
@@ -69,10 +68,14 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
         throw error;
     }
 };
+
+/**
+ * Gửi email xác thực tài khoản
+ */
 const sendVerifyEmail = async (email, fullName, verifyUrl) => {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.log('?? [MOCK EMAIL] Verify Email');
+            console.log('📧 [MOCK EMAIL] Verify Email');
             console.log('Verify link: ' + verifyUrl);
             return;
         }
@@ -82,16 +85,35 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
         await transporter.sendMail({
             from: '"Lawyer Platform" <' + (process.env.EMAIL_FROM || process.env.EMAIL_USER) + '>',
             to: email,
-            subject: 'X�c th?c email t�i kho?n',
-            html: '<h2>X�c th?c email</h2><p>Xin ch�o <b>' + fullName + '</b>,</p><p>Vui l�ng click v�o link b�n du?i d? x�c th?c email:</p><a href="' + verifyUrl + '">X�c th?c email</a><p>Link c� hi?u l?c trong 24 gi?.</p>'
+            subject: 'Xác thực email tài khoản',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">Xác thực email</h2>
+                    <p>Xin chào <b>${fullName}</b>,</p>
+                    <p>Vui lòng click vào link bên dưới để xác thực email cho tài khoản của bạn:</p>
+                    <p style="margin: 20px 0;">
+                        <a href="${verifyUrl}" 
+                           style="background-color: #2563eb; color: white; padding: 12px 24px; 
+                                  text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Xác thực email
+                        </a>
+                    </p>
+                    <p>Link có hiệu lực trong 24 giờ.</p>
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+                    <p style="color: #999; font-size: 12px;">
+                        Email này được gửi tự động, vui lòng không trả lời.
+                    </p>
+                </div>
+            `
         });
+        console.log('✅ Email xác thực đã được gửi');
     } catch (error) {
-        console.error('L?i g?i email verify:', error);
+        console.error('❌ Lỗi gửi email verify:', error);
     }
 };
 
 /**
- * Gửi email cảm ơn sau khi gửi yêu cầu tư vấn
+ * Gửi email xác nhận sau khi gửi yêu cầu tư vấn
  */
 const sendInquiryConfirmationEmail = async (email, fullName) => {
     try {
@@ -148,6 +170,9 @@ const sendInquiryConfirmationEmail = async (email, fullName) => {
     }
 };
 
+/**
+ * Gửi email khi luật sư tiếp nhận yêu cầu
+ */
 const sendInquiryAcceptedEmail = async (email, fullName, lawyerName) => {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -186,11 +211,15 @@ const sendInquiryAcceptedEmail = async (email, fullName, lawyerName) => {
             `
         };
         await transporter.sendMail(mailOptions);
+        console.log('✅ Email tiếp nhận yêu cầu đã được gửi');
     } catch (error) {
         console.error('❌ Lỗi gửi email tiếp nhận:', error);
     }
 };
 
+/**
+ * Gửi email khi yêu cầu tư vấn hoàn thành
+ */
 const sendInquiryResolvedEmail = async (email, fullName, lawyerName, reply) => {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -231,11 +260,15 @@ const sendInquiryResolvedEmail = async (email, fullName, lawyerName, reply) => {
             `
         };
         await transporter.sendMail(mailOptions);
+        console.log('✅ Email hoàn thành đã được gửi');
     } catch (error) {
         console.error('❌ Lỗi gửi email hoàn thành:', error);
     }
 };
 
+/**
+ * Gửi email thương thảo mức phí với Luật sư
+ */
 const sendNegotiationEmail = async (email, fullName, message) => {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -277,6 +310,7 @@ const sendNegotiationEmail = async (email, fullName, message) => {
             `
         };
         await transporter.sendMail(mailOptions);
+        console.log('✅ Email thương thảo đã được gửi');
     } catch (error) {
         console.error('❌ Lỗi gửi email thương thảo:', error);
     }
@@ -290,5 +324,3 @@ module.exports = {
     sendInquiryResolvedEmail,
     sendNegotiationEmail
 };
-
-
