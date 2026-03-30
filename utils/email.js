@@ -1,13 +1,17 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
+const getFrontendBaseUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+
 /**
  * Tạo transporter cho email (sử dụng Gmail)
  */
 const createTransporter = () => {
     const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
-    const port = parseInt(process.env.EMAIL_PORT) || 465; // Đổi mặc định sang 465 cho server deploy
-    const isSecure = port === 465;
+    const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
+    const isSecure = process.env.EMAIL_SECURE
+        ? process.env.EMAIL_SECURE === 'true'
+        : port === 465;
 
     console.log(`- Cấu hình SMTP: ${host}:${port} (Secure: ${isSecure})`);
     
@@ -19,6 +23,9 @@ const createTransporter = () => {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
         },
+        connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT, 10) || 10000,
+        greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT, 10) || 10000,
+        socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT, 10) || 15000,
         tls: {
             rejectUnauthorized: false // Giúp tránh lỗi chứng chỉ trên một số server deploy
         }
@@ -33,12 +40,12 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             console.log('📧 [MOCK EMAIL] Password Reset Email:');
             console.log(`To: ${email}`);
-            console.log(`Reset Link: ${process.env.FRONTEND_URL || 'http://localhost:3001'}/reset-password?token=${resetToken}`);
+            console.log(`Reset Link: ${getFrontendBaseUrl()}/reset-password?token=${resetToken}`);
             return;
         }
 
         const transporter = createTransporter();
-        const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/reset-password?token=${resetToken}`;
+        const resetUrl = `${getFrontendBaseUrl()}/reset-password?token=${resetToken}`;
 
         const mailOptions = {
             from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
@@ -82,42 +89,63 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
  * Gửi email xác thực tài khoản
  */
 const sendVerifyEmail = async (email, fullName, verifyUrl) => {
-    try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.log('⚠️ [MOCK EMAIL] EMAIL_USER/PASS chưa được set. Verify link:', verifyUrl);
-            return;
-        }
+    return new Promise((resolve) => {
+        setImmediate(async () => {
+            try {
+                if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+                    console.log('⚠️ [MOCK EMAIL] EMAIL_USER/PASS chưa được set. Verify link:', verifyUrl);
+                    resolve({ sent: false, mocked: true, reason: 'missing_email_env' });
+                    return;
+                }
 
-        const transporter = createTransporter();
-        
-        console.log(`📧 Đang gửi email xác thực đến: ${email}...`);
-        
-        await transporter.sendMail({
-            from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-            to: email,
-            subject: 'Xác thực email tài khoản',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 40px; border-radius: 12px;">
-                    <h2 style="color: #041837; font-weight: 800; text-transform: uppercase;">Xác thực tài khoản</h2>
-                    <p style="font-size: 16px; color: #475569;">Xin chào <b>${fullName}</b>,</p>
-                    <p style="line-height: 1.6;">Cảm ơn bạn đã đăng ký tại hệ thống Hiểu Luật. Vui lòng nhấn vào nút bên dưới để xác thực email và bắt đầu sử dụng dịch vụ:</p>
-                    <div style="margin: 30px 0; text-align: center;">
-                        <a href="${verifyUrl}" 
-                           style="background-color: #041837; color: white; padding: 16px 32px; 
-                                  text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 800; letter-spacing: 1px;">
-                            XÁC THỰC NGAY
-                        </a>
-                    </div>
-                    <p style="color: #94a3b8; font-size: 12px; font-style: italic;">Link có hiệu lực trong 24 giờ. Nếu bạn không đăng ký tài khoản, vui lòng bỏ qua email này.</p>
-                </div>
-            `
+                const transporter = createTransporter();
+
+                console.log(`📧 Đang gửi email xác thực đến: ${email}...`);
+
+                const info = await transporter.sendMail({
+                    from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+                    to: email,
+                    subject: 'Xác thực email tài khoản',
+                    text: [
+                        `Xin chào ${fullName},`,
+                        '',
+                        'Vui lòng truy cập link dưới đây để xác thực email tài khoản:',
+                        verifyUrl,
+                        '',
+                        'Link có hiệu lực trong 24 giờ.'
+                    ].join('\n'),
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 40px; border-radius: 12px;">
+                            <h2 style="color: #041837; font-weight: 800; text-transform: uppercase;">Xác thực tài khoản</h2>
+                            <p style="font-size: 16px; color: #475569;">Xin chào <b>${fullName}</b>,</p>
+                            <p style="line-height: 1.6;">Cảm ơn bạn đã đăng ký tại hệ thống Hiểu Luật. Vui lòng nhấn vào nút bên dưới để xác thực email và bắt đầu sử dụng dịch vụ:</p>
+                            <div style="margin: 30px 0; text-align: center;">
+                                <a href="${verifyUrl}" 
+                                   style="background-color: #041837; color: white; padding: 16px 32px; 
+                                          text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 800; letter-spacing: 1px;">
+                                    XÁC THỰC NGAY
+                                </a>
+                            </div>
+                            <p style="line-height: 1.6; color: #475569;">Nếu nút không hoạt động, hãy copy link này vào trình duyệt:</p>
+                            <p style="word-break: break-all; color: #0f172a; font-size: 13px;">${verifyUrl}</p>
+                            <p style="color: #94a3b8; font-size: 12px; font-style: italic;">Link có hiệu lực trong 24 giờ. Nếu bạn không đăng ký tài khoản, vui lòng bỏ qua email này.</p>
+                        </div>
+                    `
+                });
+
+                console.log('✅ Email xác thực đã được gửi thành công!', info.messageId);
+                resolve({ sent: true, messageId: info.messageId });
+            } catch (error) {
+                console.error('❌ Lỗi SMTP nghiêm trọng:', error.code, error.message);
+                // Đừng throw lỗi ở đây để không làm gián đoạn luồng chính của website
+                resolve({
+                    sent: false,
+                    errorCode: error.code || 'UNKNOWN_EMAIL_ERROR',
+                    errorMessage: error.message
+                });
+            }
         });
-        
-        console.log('✅ Email xác thực đã được gửi thành công!');
-    } catch (error) {
-        console.error('❌ Lỗi SMTP nghiêm trọng:', error.code, error.message);
-        // Đừng throw lỗi ở đây để không làm gián đoạn luồng chính của website
-    }
+    });
 };
 
 /**

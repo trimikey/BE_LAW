@@ -81,7 +81,7 @@ const signup = async (req, res) => {
         // ===== Táº O TOKEN VERIFY EMAIL =====
         const verifyToken = crypto.randomBytes(32).toString('hex');
 
-        const cleanFrontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').trim();
+        const cleanFrontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
         const verifyUrl = `${cleanFrontendUrl}/verify-email?token=${verifyToken}`;
 
 
@@ -583,7 +583,7 @@ const verifyEmail = async (req, res) => {
         }
 
         // Token hết hạn
-        if (new Date() > user.email_verify_expires) {
+        if (!user.email_verify_expires || Date.now() > new Date(user.email_verify_expires).getTime()) {
             return res.status(400).json({
                 success: false,
                 message: 'Token xác thực đã hết hạn.'
