@@ -20,13 +20,16 @@ const getEmailFrom = () => {
  * Tạo transporter cho email (sử dụng Gmail)
  */
 const createTransporter = () => {
-    const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+    const host = (process.env.EMAIL_HOST || 'smtp.gmail.com').trim();
     const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
-    const isSecure = process.env.EMAIL_SECURE
-        ? process.env.EMAIL_SECURE === 'true'
+    
+    // Kiểm tra EMAIL_SECURE an toàn hơn (chấp nhận cả 'true', 'TRUE', true)
+    const envSecure = process.env.EMAIL_SECURE;
+    const isSecure = envSecure 
+        ? String(envSecure).toLowerCase() === 'true' 
         : port === 465;
 
-    console.log(`- Cấu hình SMTP: ${host}:${port} (Secure: ${isSecure})`);
+    console.log(`📡 SMTP CONFIG: ${host}:${port} (Secure: ${isSecure}) | User: ${getEmailUser()}`);
     
     return nodemailer.createTransport({
         host: host,
@@ -36,11 +39,13 @@ const createTransporter = () => {
             user: getEmailUser(),
             pass: getEmailPass()
         },
-        connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT, 10) || 10000,
-        greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT, 10) || 10000,
-        socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT, 10) || 15000,
+        connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT, 10) || 20000, // Tăng thêm thời gian chờ
+        greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT, 10) || 20000,
+        socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT, 10) || 30000,
+        // Ép buộc sử dụng IPv4 vì IPv6 thường gây lỗi ETIMEDOUT trên các server cloud
+        family: 4,
         tls: {
-            rejectUnauthorized: false // Giúp tránh lỗi chứng chỉ trên một số server deploy
+            rejectUnauthorized: false
         }
     });
 };
@@ -113,7 +118,7 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
 
                 const transporter = createTransporter();
 
-                console.log(`📧 Đang gửi email xác thực đến: ${email}...`);
+                console.log(`📧 Đang gửi email xác thực đến: ${email} (Dùng ${getEmailUser()})...`);
 
                 const info = await transporter.sendMail({
                     from: `"Lawyer Platform" <${getEmailFrom()}>`,
@@ -149,7 +154,12 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
                 console.log('✅ Email xác thực đã được gửi thành công!', info.messageId);
                 resolve({ sent: true, messageId: info.messageId });
             } catch (error) {
-                console.error('❌ Lỗi SMTP nghiêm trọng:', error.code, error.message);
+                console.error('❌ Lỗi SMTP nghiêm trọng:', {
+                    code: error.code,
+                    command: error.command,
+                    response: error.response,
+                    message: error.message
+                });
                 // Đừng throw lỗi ở đây để không làm gián đoạn luồng chính của website
                 resolve({
                     sent: false,

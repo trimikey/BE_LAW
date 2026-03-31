@@ -408,12 +408,12 @@ const forgotPassword = async (req, res) => {
             });
         }
 
-        // Gá»­i email reset password
+        // Gửi email reset password
         try {
-            (user.email, user.full_name, resetToken);
+            await sendPasswordResetEmail(user.email, user.full_name, resetToken);
         } catch (emailError) {
             console.error('Email sending error:', emailError);
-            // Váº«n tráº£ vá»  success Ä‘á»ƒ khÃ´ng lá»™ thÃ´ng tin
+            // Vẫn trả về success để không lộ thông tin
         }
 
         res.json({
