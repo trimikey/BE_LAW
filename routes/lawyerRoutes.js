@@ -21,7 +21,9 @@ const {
     updateMyProfile,
     createClient,
     restoreAvailabilitySlot,
-    getMyReviews
+    getMyReviews,
+    archiveClient,
+    restoreClient
 } = require('../controllers/lawyerController');
 const uploadAvatar = require('../middleware/uploadAvatar');
 const router = express.Router();
@@ -49,4 +51,6 @@ router.get('/lawyers', getLawyers);
 router.get('/my-profile', getMyProfile);
 router.put('/my-profile', uploadAvatar.single('avatar'), updateMyProfile);
 router.get('/reviews', getMyReviews);
+router.patch('/clients/:id/archive', archiveClient);
+router.patch('/clients/:id/restore', restoreClient);
 module.exports = router;

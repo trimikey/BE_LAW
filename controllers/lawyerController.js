@@ -330,11 +330,12 @@ const getDashboardStats = async (req, res) => {
 const getMyCases = async (req, res) => {
     try {
         const lawyerId = req.user.id;
-        const { status, page = 1, limit = 10 } = req.query;
+        const { status, clientId, page = 1, limit = 10 } = req.query;
         const offset = (page - 1) * limit;
 
         const where = { lawyer_id: lawyerId };
         if (status) where.status = status;
+        if (clientId) where.client_id = clientId;
 
         const { count, rows } = await Case.findAndCountAll({
             where,
@@ -868,6 +869,7 @@ const getMyClients = async (req, res) => {
     try {
         const lawyerId = req.user.id;
         const query = String(req.query.q || '').trim().toLowerCase();
+        const showArchived = req.query.showArchived === 'true';
         const limit = Math.max(1, Math.min(Number(req.query.limit) || 50, 100));
 
         // 1. Lấy clients thông qua cases
@@ -887,9 +889,10 @@ const getMyClients = async (req, res) => {
         const createdClients = await User.findAll({
             where: {
                 created_by_id: lawyerId,
-                role_id: 3 // Chỉ lấy role client
+                role_id: 3,
+                is_active: showArchived ? false : true
             },
-            attributes: ['id', 'full_name', 'email', 'phone', 'avatar', 'created_at', 'updated_at']
+            attributes: ['id', 'full_name', 'email', 'phone', 'avatar', 'is_active', 'created_at', 'updated_at']
         });
 
         // Gộp danh sách clients độc bản
@@ -958,7 +961,8 @@ const getMyClients = async (req, res) => {
                     documentsCount: c.cases.reduce((sum, cs) => sum + (docCountByCaseId.get(Number(cs.id)) || 0), 0),
                     lastActivityAt: c.lastActivityAt,
                     lastCaseTitle: c.lastCaseTitle,
-                    profileStatus: 'archived'
+                    profileStatus: 'archived',
+                    is_active: c.is_active
                 };
 
                 if (summary.activeCases > 0) {
@@ -1311,6 +1315,76 @@ const createClient = async (req, res) => {
     }
 };
 
+const archiveClient = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const lawyerId = req.user.id;
+
+        // Verify client permission (created by lawyer OR has case with lawyer)
+        const isOwner = await User.findOne({ where: { id, created_by_id: lawyerId } });
+        const hasCase = await Case.findOne({ where: { client_id: id, lawyer_id: lawyerId } });
+
+        if (!isOwner && !hasCase) {
+            return res.status(403).json({ success: false, message: 'Bạn không có quyền lưu trữ hồ sơ này' });
+        }
+
+        const client = await User.findByPk(id);
+        if (!client) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ' });
+        }
+
+        // Kiểm tra xem khách hàng có vụ việc đang xử lý không
+        const activeCase = await Case.findOne({
+            where: {
+                client_id: id,
+                lawyer_id: lawyerId,
+                status: ['pending', 'in_progress', 'reviewing']
+            }
+        });
+
+        if (activeCase) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể lưu trữ hồ sơ vì khách hàng đang có vụ việc đang xử lý'
+            });
+        }
+
+        await client.update({ is_active: false });
+
+        res.json({ success: true, message: 'Đã lưu trữ hồ sơ khách hàng' });
+    } catch (error) {
+        console.error('Error archiving client:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi lưu trữ hồ sơ' });
+    }
+};
+
+const restoreClient = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const lawyerId = req.user.id;
+
+        // Verify permission (same logic)
+        const isOwner = await User.findOne({ where: { id, created_by_id: lawyerId } });
+        const hasCase = await Case.findOne({ where: { client_id: id, lawyer_id: lawyerId } });
+
+        if (!isOwner && !hasCase) {
+            return res.status(403).json({ success: false, message: 'Bạn không có quyền khôi phục hồ sơ này' });
+        }
+
+        const client = await User.findByPk(id);
+        if (!client) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ' });
+        }
+
+        await client.update({ is_active: true });
+
+        res.json({ success: true, message: 'Đã khôi phục hồ sơ khách hàng' });
+    } catch (error) {
+        console.error('Error restoring client:', error);
+        res.status(500).json({ success: false, message: 'Lỗi khi khôi phục hồ sơ' });
+    }
+};
+
 module.exports = {
     getDashboardStats,
     getMyCases,
@@ -1459,5 +1533,7 @@ module.exports = {
             console.error('Error fetching lawyer reviews:', error);
             res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách đánh giá' });
         }
-    }
+    },
+    archiveClient,
+    restoreClient
 };
