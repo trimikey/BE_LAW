@@ -375,11 +375,28 @@ const sendNegotiationEmail = async (email, fullName, message) => {
     }
 };
 
+/**
+ * Kiểm tra kết nối SMTP lúc khởi động
+ */
+const verifySmtpConnection = async () => {
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+        const transporter = createTransporter();
+        await transporter.verify();
+        console.log('✅ SMTP: Kết nối email thành công!');
+    } catch (error) {
+        console.error('❌ SMTP: Kết nối email thất bại! Link xác thức có thể không gửi được.');
+        console.error('   Mã lỗi:', error.code, '| Tin nhắn:', error.message);
+        throw error;
+    }
+};
+
 module.exports = {
     sendPasswordResetEmail,
     sendVerifyEmail,
     sendInquiryConfirmationEmail,
     sendInquiryAcceptedEmail,
     sendInquiryResolvedEmail,
-    sendNegotiationEmail
+    sendNegotiationEmail,
+    verifySmtpConnection
 };

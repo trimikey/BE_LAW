@@ -588,7 +588,7 @@ const verifyEmail = async (req, res) => {
             now: new Date().toISOString(),
             expiresAt: user.email_verify_expires ? new Date(user.email_verify_expires).toISOString() : null
         });
-        if (!user.email_verify_expires || Date.now() > new Date(user.email_verify_expires).getTime()) {
+        if (!user.email_verify_expires || Date.now() > (new Date(user.email_verify_expires).getTime() + 24 * 60 * 60 * 1000)) {
             return res.status(400).json({
                 success: false,
                 message: 'Token xác thực đã hết hạn.'

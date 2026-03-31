@@ -148,6 +148,12 @@ const startServer = async () => {
             console.log('✅ Đồng bộ database thành công!');
         }
 
+        // KIỂM TRA KẾT NỐI SMTP (Để debug lỗi gửi mail trên Deploy)
+        const { verifySmtpConnection } = require('./utils/email');
+        verifySmtpConnection().catch(() => {
+            console.log('⚠️ Cảnh báo: SMTP chưa được cấu hình đúng, các tính năng gửi mail có thể không hoạt động.');
+        });
+
         // Add Socket.io logic here or ensure it's initialized before verify
         const finalizeVideoCall = async (callerId, calleeId, reason, endedBy) => {
             const key = getPairKey(callerId, calleeId);
