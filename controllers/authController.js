@@ -583,6 +583,11 @@ const verifyEmail = async (req, res) => {
         }
 
         // Token hết hạn
+        console.log('Verify email debug:', {
+            tokenPreview: String(token).slice(0, 12),
+            now: new Date().toISOString(),
+            expiresAt: user.email_verify_expires ? new Date(user.email_verify_expires).toISOString() : null
+        });
         if (!user.email_verify_expires || Date.now() > new Date(user.email_verify_expires).getTime()) {
             return res.status(400).json({
                 success: false,
@@ -606,6 +611,63 @@ const verifyEmail = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Lỗi xác thực email.'
+        });
+    }
+};
+
+const resendVerificationEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email khong duoc de trong.'
+            });
+        }
+
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const user = await User.findOne({
+            where: { email: normalizedEmail }
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Khong tim thay tai khoan voi email nay.'
+            });
+        }
+
+        if (user.email_verified) {
+            return res.json({
+                success: true,
+                message: 'Email nay da duoc xac thuc truoc do.'
+            });
+        }
+
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const cleanFrontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+        const verifyUrl = `${cleanFrontendUrl}/verify-email?token=${verifyToken}`;
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await user.update({
+            email_verify_token: verifyToken,
+            email_verify_expires: expiresAt
+        });
+
+        sendVerifyEmail(user.email, user.full_name, verifyUrl).catch((err) => {
+            console.error('Resend verify email error:', err.message);
+        });
+
+        return res.json({
+            success: true,
+            message: 'Da gui lai email xac thuc. Vui long kiem tra hop thu.'
+        });
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Loi gui lai email xac thuc.'
         });
     }
 };
@@ -759,6 +821,7 @@ module.exports = {
     resetPassword,
     getMe,
     verifyEmail,
+    resendVerificationEmail,
     updateMe,
     uploadLicense,
     changePassword

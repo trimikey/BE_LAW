@@ -9,6 +9,7 @@ const {
     resetPassword,
     getMe,
     verifyEmail,
+    resendVerificationEmail,
     uploadLicense,
     changePassword,
     updateMe,
@@ -62,6 +63,13 @@ const forgotPasswordValidation = [
         .normalizeEmail()
 ];
 
+const resendVerificationValidation = [
+    body('email')
+        .isEmail()
+        .withMessage('Email khÃ´ng há»£p lá»‡')
+        .normalizeEmail()
+];
+
 const resetPasswordValidation = [
     body('token')
         .notEmpty()
@@ -81,6 +89,7 @@ router.post('/refresh-token', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, resetPassword);
 router.get('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerificationValidation, resendVerificationEmail);
 
 router.post(
     '/upload-license',

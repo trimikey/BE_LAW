@@ -2,6 +2,19 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const getFrontendBaseUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+const getEmailUser = () => (process.env.EMAIL_USER || '').trim();
+const getEmailPass = () => (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+const getEmailFrom = () => {
+    const emailUser = getEmailUser();
+    const configuredFrom = (process.env.EMAIL_FROM || '').trim();
+    const smtpHost = (process.env.EMAIL_HOST || 'smtp.gmail.com').trim().toLowerCase();
+
+    if (smtpHost.includes('gmail.com')) {
+        return emailUser;
+    }
+
+    return configuredFrom || emailUser;
+};
 
 /**
  * Tạo transporter cho email (sử dụng Gmail)
@@ -20,8 +33,8 @@ const createTransporter = () => {
         port: port,
         secure: isSecure,
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
+            user: getEmailUser(),
+            pass: getEmailPass()
         },
         connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT, 10) || 10000,
         greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT, 10) || 10000,
@@ -37,7 +50,7 @@ const createTransporter = () => {
  */
 const sendPasswordResetEmail = async (email, fullName, resetToken) => {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        if (!getEmailUser() || !getEmailPass()) {
             console.log('📧 [MOCK EMAIL] Password Reset Email:');
             console.log(`To: ${email}`);
             console.log(`Reset Link: ${getFrontendBaseUrl()}/reset-password?token=${resetToken}`);
@@ -48,7 +61,7 @@ const sendPasswordResetEmail = async (email, fullName, resetToken) => {
         const resetUrl = `${getFrontendBaseUrl()}/reset-password?token=${resetToken}`;
 
         const mailOptions = {
-            from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Lawyer Platform" <${getEmailFrom()}>`,
             to: email,
             subject: 'Đặt lại mật khẩu - Lawyer Platform',
             html: `
@@ -92,7 +105,7 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
     return new Promise((resolve) => {
         setImmediate(async () => {
             try {
-                if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+                if (!getEmailUser() || !getEmailPass()) {
                     console.log('⚠️ [MOCK EMAIL] EMAIL_USER/PASS chưa được set. Verify link:', verifyUrl);
                     resolve({ sent: false, mocked: true, reason: 'missing_email_env' });
                     return;
@@ -103,7 +116,7 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
                 console.log(`📧 Đang gửi email xác thực đến: ${email}...`);
 
                 const info = await transporter.sendMail({
-                    from: `"Lawyer Platform" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+                    from: `"Lawyer Platform" <${getEmailFrom()}>`,
                     to: email,
                     subject: 'Xác thực email tài khoản',
                     text: [
@@ -153,7 +166,7 @@ const sendVerifyEmail = async (email, fullName, verifyUrl) => {
  */
 const sendInquiryConfirmationEmail = async (email, fullName) => {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        if (!getEmailUser() || !getEmailPass()) {
             console.log('📧 [MOCK EMAIL] Inquiry Confirmation:');
             console.log(`To: ${email}`);
             return;
@@ -162,7 +175,7 @@ const sendInquiryConfirmationEmail = async (email, fullName) => {
         const transporter = createTransporter();
 
         const mailOptions = {
-            from: `"Hệ thống Hiểu Luật" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Hệ thống Hiểu Luật" <${getEmailFrom()}>`,
             to: email,
             subject: 'Xác nhận yêu cầu tư vấn - Hệ thống Hiểu Luật',
             html: `
@@ -211,7 +224,7 @@ const sendInquiryConfirmationEmail = async (email, fullName) => {
  */
 const sendInquiryAcceptedEmail = async (email, fullName, lawyerName) => {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        if (!getEmailUser() || !getEmailPass()) {
             console.log('📧 [MOCK EMAIL] Inquiry Accepted:');
             console.log(`To: ${email}, Lawyer: ${lawyerName}`);
             return;
@@ -219,7 +232,7 @@ const sendInquiryAcceptedEmail = async (email, fullName, lawyerName) => {
 
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"Hệ thống Hiểu Luật" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Hệ thống Hiểu Luật" <${getEmailFrom()}>`,
             to: email,
             subject: 'Yêu cầu tư vấn của bạn đã được luật sư tiếp nhận - Hệ thống Hiểu Luật',
             html: `
@@ -258,7 +271,7 @@ const sendInquiryAcceptedEmail = async (email, fullName, lawyerName) => {
  */
 const sendInquiryResolvedEmail = async (email, fullName, lawyerName, reply) => {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        if (!getEmailUser() || !getEmailPass()) {
             console.log('📧 [MOCK EMAIL] Inquiry Resolved:');
             console.log(`To: ${email}, Reply: ${reply}`);
             return;
@@ -266,7 +279,7 @@ const sendInquiryResolvedEmail = async (email, fullName, lawyerName, reply) => {
 
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"Hệ thống Hiểu Luật" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Hệ thống Hiểu Luật" <${getEmailFrom()}>`,
             to: email,
             subject: 'Kết quả phản hồi tư vấn pháp lý - Hệ thống Hiểu Luật',
             html: `
@@ -307,7 +320,7 @@ const sendInquiryResolvedEmail = async (email, fullName, lawyerName, reply) => {
  */
 const sendNegotiationEmail = async (email, fullName, message) => {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        if (!getEmailUser() || !getEmailPass()) {
             console.log('📧 [MOCK EMAIL] Negotiation Email:');
             console.log(`To: ${email}, Message: ${message}`);
             return;
@@ -315,7 +328,7 @@ const sendNegotiationEmail = async (email, fullName, message) => {
 
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"Ban Điều Hành Hệ thống" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Ban Điều Hành Hệ thống" <${getEmailFrom()}>`,
             to: email,
             subject: 'Yêu cầu thương thảo mức phí tư vấn - Hệ thống Hiểu Luật',
             html: `
