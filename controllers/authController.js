@@ -6,14 +6,14 @@ const { sendPasswordResetEmail } = require('../utils/email');
 const { sendVerifyEmail } = require('../utils/email');
 
 /**
- * ÄÄƒng kÃ½ tÃ i khoáº£n má»›i
+ * Đăng ký tài khoản mới
  */
 const signup = async (req, res) => {
     console.log('--- Signup Attempt ---');
     console.log('Body:', req.body);
     console.log('File:', req.file);
     try {
-        // Kiá»ƒm tra validation errors
+        // kiểm tra validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             console.log('Validation Errors:', errors.array());
