@@ -1462,7 +1462,7 @@ module.exports = {
             if (fullName) userUpdate.full_name = fullName;
             if (phone) userUpdate.phone = phone;
             if (req.file) {
-                userUpdate.avatar = `uploads/avatars/${req.file.filename}`;
+                userUpdate.avatar = req.file.path;
             }
             await user.update(userUpdate);
 

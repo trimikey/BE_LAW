@@ -1,38 +1,68 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const cloudinary = require('../config/cloudinary');
 
-const uploadDir = path.join(process.cwd(), 'uploads/avatars');
+const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
 
-// 👉 TỰ ĐỘNG TẠO FOLDER NẾU CHƯA CÓ
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, uniqueName + path.extname(file.originalname));
-    }
-});
-
-const uploadAvatar = multer({
-    storage,
+const multerUpload = multer({
+    storage: multer.memoryStorage(),
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB for avatars
+        fileSize: 5 * 1024 * 1024
     },
     fileFilter: (req, file, cb) => {
-        const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
 
         if (!allowed.includes(ext)) {
-            return cb(new Error('File không hợp lệ (JPG, PNG, WEBP)'));
+            return cb(new Error('File khong hop le (JPG, PNG, WEBP)'));
         }
+
         cb(null, true);
     }
 });
 
-module.exports = uploadAvatar;
+const uploadBufferToCloudinary = (fileBuffer, originalname) => new Promise((resolve, reject) => {
+    const ext = path.extname(originalname).toLowerCase().replace('.', '') || 'jpg';
+    const uploadStream = cloudinary.uploader.upload_stream(
+        {
+            folder: 'lawyer-platform/avatars',
+            public_id: `avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+            format: ext,
+            resource_type: 'image'
+        },
+        (error, result) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            resolve(result);
+        }
+    );
+
+    uploadStream.end(fileBuffer);
+});
+
+module.exports = {
+    single(fieldName) {
+        const handleSingle = multerUpload.single(fieldName);
+
+        return (req, res, next) => {
+            handleSingle(req, res, async (error) => {
+                if (error || !req.file) {
+                    next(error);
+                    return;
+                }
+
+                try {
+                    const result = await uploadBufferToCloudinary(req.file.buffer, req.file.originalname);
+                    req.file.path = result.secure_url;
+                    req.file.filename = result.public_id;
+                    req.file.cloudinary = result;
+                    next();
+                } catch (uploadError) {
+                    next(uploadError);
+                }
+            });
+        };
+    }
+};
