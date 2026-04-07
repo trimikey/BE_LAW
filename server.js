@@ -463,8 +463,9 @@ const startServer = async () => {
             });
         });
 
-        server.listen(PORT, () => {
-            console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
+        server.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 Server đang chạy tại http://0.0.0.0:${PORT}`);
+            console.log(`📱 Truy cập từ máy ảo Android qua: http://10.0.2.2:${PORT}`);
             console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 
             // Chạy trình quét lịch bị lỡ và gửi nhắc nhở mỗi 10 phút
